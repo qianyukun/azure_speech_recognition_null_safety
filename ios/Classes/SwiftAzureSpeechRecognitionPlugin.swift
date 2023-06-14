@@ -96,7 +96,7 @@ public class SwiftAzureSpeechRecognitionPlugin: NSObject, FlutterPlugin {
             print("error \(error) happened")
             speechConfig = nil
         }
-        //speechConfig?.speechRecognitionLanguage = lang
+        speechConfig?.speechRecognitionLanguage = lang
         //speechConfig?.setPropertyTo(timeoutMs, by: SPXPropertyId.speechSegmentationSilenceTimeoutMs)
         let audioConfig = SPXAudioConfiguration()
         speechRecognizer = try! SPXSpeechRecognizer(speechConfiguration: speechConfig!, audioConfiguration: audioConfig)
