@@ -97,9 +97,16 @@ public class SwiftAzureSpeechRecognitionPlugin: NSObject, FlutterPlugin {
             speechConfig = nil
         }
         speechConfig?.speechRecognitionLanguage = lang
-        //speechConfig?.setPropertyTo(timeoutMs, by: SPXPropertyId.speechSegmentationSilenceTimeoutMs)
+        speechConfig?.setPropertyTo(timeoutMs, by: SPXPropertyId.speechSegmentationSilenceTimeoutMs)
+        let languages = [lang, "en-US"]
+        let autoDetectLangConfig = try! SPXAutoDetectSourceLanguageConfiguration(languages)
         let audioConfig = SPXAudioConfiguration()
-        speechRecognizer = try! SPXSpeechRecognizer(speechConfiguration: speechConfig!, audioConfiguration: audioConfig)
+//        speechRecognizer = try! SPXSpeechRecognizer(speechConfiguration: speechConfig!,
+//                                                    audioConfiguration: audioConfig,
+//                                                    autoDetectSourceLanguageConfiguration: autoDetectLangConfig)
+      speechRecognizer = try! SPXSpeechRecognizer(speechConfiguration: speechConfig!,
+                          autoDetectSourceLanguageConfiguration: autoDetectLangConfig,
+                          audioConfiguration: audioConfig)
         speechRecognizer?.addRecognizedEventHandler() { reco, evt in
              if self.text.isEmpty == false {
              self.text += " "
