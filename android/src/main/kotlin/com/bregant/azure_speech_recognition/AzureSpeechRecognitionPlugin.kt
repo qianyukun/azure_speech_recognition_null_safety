@@ -11,6 +11,7 @@ import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
 import com.microsoft.cognitiveservices.speech.intent.LanguageUnderstandingModel;
 import com.microsoft.cognitiveservices.speech.intent.IntentRecognitionResult;
 import com.microsoft.cognitiveservices.speech.intent.IntentRecognizer;
+import com.microsoft.cognitiveservices.speech.AutoDetectSourceLanguageConfig;
 import com.bregant.azure_speech_recognition.MicrophoneStream;
 import android.app.Activity;
 
@@ -29,7 +30,8 @@ import android.util.Log;
 import android.text.TextUtils;
 import com.microsoft.cognitiveservices.speech.*
 
-import java.util.concurrent.Semaphore 
+import java.util.concurrent.Semaphore
+import java.util.Arrays
 
 
 /** AzureSpeechRecognitionPlugin */
@@ -42,7 +44,7 @@ public class AzureSpeechRecognitionPlugin(): FlutterPlugin,Activity(),MethodCall
   private var microphoneStream : MicrophoneStream? = null;
   private  lateinit var handler : Handler;
   var continuousListeningStarted : Boolean = false;
-  lateinit var  reco : SpeechRecognizer;
+  var  reco : SpeechRecognizer?=null;
   var enableDictation : Boolean = false;
   private fun createMicrophoneStream() : MicrophoneStream{
     if (microphoneStream != null) {
@@ -110,8 +112,8 @@ public class AzureSpeechRecognitionPlugin(): FlutterPlugin,Activity(),MethodCall
       var serviceRegion : String= ""+call.argument("region");
       var lang : String = ""+call.argument("language");
 
-
-      micStreamRecognition(speechSubscriptionKey,serviceRegion,lang);
+      micStreamContinuosly(speechSubscriptionKey,serviceRegion,lang);
+//      micStreamRecognition(speechSubscriptionKey,serviceRegion,lang);
       result.success(true);
 
     }else if(call.method == "continuousStream"){
@@ -258,90 +260,74 @@ public class AzureSpeechRecognitionPlugin(): FlutterPlugin,Activity(),MethodCall
 
   // stream continuosly until you press the button to stop ! STILL NOT WORKING COMPLETELY
 
-  fun micStreamContinuosly(speechSubscriptionKey:String,serviceRegion:String,lang:String){
-    val logTag : String = "micStreamContinuos";
-    
-    
-    lateinit var  audioInput : AudioConfig;
-    var content :  ArrayList<String> = ArrayList<String>();
+  fun micStreamContinuosly(speechSubscriptionKey: String, serviceRegion: String, lang: String) {
+    val logTag: String = "micStreamContinuos";
+
+
+    lateinit var audioInput: AudioConfig;
+    var content: ArrayList<String> = ArrayList<String>();
 
 
     Log.i(logTag, "StatoRiconoscimentoVocale: " + continuousListeningStarted);
 
-    if(continuousListeningStarted){
-      if(reco != null){
-        val _task1  = reco.stopContinuousRecognitionAsync();
+    if (continuousListeningStarted) {
+      if (reco != null) {
+        val _task1 = reco!!.stopContinuousRecognitionAsync();
 
         setOnTaskCompletedListener(_task1, { result ->
-          Log.i(logTag, "Continuous recognition stopped.");
           continuousListeningStarted = false;
-          invokeMethod("speech.onRecognitionStopped",null);
-                reco.close();
-
         })
-      }else{
+      } else {
         continuousListeningStarted = false;
       }
-      
 
       return;
     }
-    
+
     content.clear();
 
-    try{
-      
+    try {
       //audioInput = AudioConfig.fromStreamInput(createMicrophoneStream());
 
-
-      var config : SpeechConfig = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion); 
+      val autoDetectSourceLanguageConfig: AutoDetectSourceLanguageConfig =
+        AutoDetectSourceLanguageConfig.fromLanguages(Arrays.asList("en-US", lang));
+      var config: SpeechConfig =
+        SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion);
       assert(config != null);
 
-      config.speechRecognitionLanguage = lang;
-
-      if(enableDictation){
-        Log.i(logTag, "Enabled BF dictation");
+      if (enableDictation) {
         config.enableDictation();
-        Log.i(logTag, "Enabled AF dictation");
-
       }
 
-      reco = SpeechRecognizer(config,getAudioConfig());
+      reco = SpeechRecognizer(config, autoDetectSourceLanguageConfig, getAudioConfig());
 
       assert(reco != null);
-
-
-      
-
-      reco.recognizing.addEventListener({ o, speechRecognitionResultEventArgs->
-        val s = speechRecognitionResultEventArgs.getResult().getText()
+      reco!!.recognized.addEventListener({ o, speechRecognitionResultEventArgs ->
+        val s = speechRecognitionResultEventArgs!!.getResult().getText();
         content.add(s);
-        Log.i(logTag, "Intermediate result received: " + s)
-        invokeMethod("speech.onSpeech",s);
-        content.removeAt(content.size - 1);
+        invokeMethod("speech.onSpeech", s);
       });
 
-      reco.recognized.addEventListener({ o, speechRecognitionResultEventArgs->
-        val s = speechRecognitionResultEventArgs.getResult().getText()
-        content.add(s);
-        Log.i(logTag, "Final result received: " + s)
-        invokeMethod("speech.onFinalResponse",s);
-      });
-      
-  
-      val _task2 = reco.startContinuousRecognitionAsync();
+      reco!!.sessionStopped.addEventListener { s, e ->
+        invokeMethod("speech.onFinalResponse", TextUtils.join(" ", content));
+        invokeMethod("speech.onRecognitionStopped", null);
+        reco?.close();
+        reco = null;
+      }
+
+      val _task2 = reco!!.startContinuousRecognitionAsync();
 
       setOnTaskCompletedListener(_task2, { result ->
         continuousListeningStarted = true;
-        invokeMethod("speech.onRecognitionStarted",null);
+        invokeMethod("speech.onRecognitionStarted", null);
 
         //invokeMethod("speech.onStopAvailable",null);
       })
-      
 
-    }catch(exec:Exception){
+
+    } catch (exec: Exception) {
       assert(false);
-      invokeMethod("speech.onException", "Exception: "+exec.message);
+      invokeMethod("speech.onException", "Exception: " + exec.message);
 
     }
   }
